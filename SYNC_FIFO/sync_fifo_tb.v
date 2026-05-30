@@ -8,102 +8,86 @@ module sync_fifo_tb;
     reg rd_en;
     reg [7:0] data_in;
 
-    wire [7:0] data_out;
     wire full;
     wire empty;
+    wire [7:0] data_out;
 
-    // DUT
-    sync_fifo dut (
+    // DUT Instantiation
+    sync_fifo uut (
         .clk(clk),
         .rst(rst),
         .wr_en(wr_en),
         .rd_en(rd_en),
         .data_in(data_in),
-        .data_out(data_out),
         .full(full),
-        .empty(empty)
+        .empty(empty),
+        .data_out(data_out)
     );
 
-    // Clock generation
+    // Clock Generation (10 ns period)
+    always #5 clk = ~clk;
+
     initial begin
+        $display("=================================================");
+        $display(" Time\tWR\tRD\tData_In\tData_Out\tFull\tEmpty");
+        $display("=================================================");
+
         clk = 0;
-        forever #5 clk = ~clk;
-    end
+        rst = 1;
+        wr_en = 0;
+        rd_en = 0;
+        data_in = 0;
 
-    initial begin
-
-        // Initialize
-        rst     = 1;
-        wr_en   = 0;
-        rd_en   = 0;
-        data_in = 8'h00;
-
-        // Reset
-        #20;
+        // Reset FIFO
+        #10;
         rst = 0;
 
-        // Write 8 values
-        $display("Writing data into FIFO");
-        repeat(8) begin
-            @(posedge clk);
-            wr_en   = 1;
-            data_in = data_in + 8'h01;
-        end
+        // Write Data
+        #10;
+        wr_en = 1; data_in = 8'h11;
 
-        @(posedge clk);
+        #10;
+        data_in = 8'h22;
+
+        #10;
+        data_in = 8'h33;
+
+        #10;
+        data_in = 8'h44;
+
+        #10;
         wr_en = 0;
 
-        // Check Full
-        if(full)
-            $display("FIFO FULL");
-        else
-            $display("FIFO NOT FULL");
-
-        // Try writing when full
-        @(posedge clk);
-        wr_en = 1;
-        data_in = 8'hFF;
-
-        @(posedge clk);
-        wr_en = 0;
-
-        // Read all values
-        $display("Reading data from FIFO");
-
-        repeat(8) begin
-            @(posedge clk);
-            rd_en = 1;
-        end
-
-        @(posedge clk);
-        rd_en = 0;
-
-        // Check Empty
-        if(empty)
-            $display("FIFO EMPTY");
-        else
-            $display("FIFO NOT EMPTY");
-
-        // Try reading when empty
-        @(posedge clk);
+        // Read Data
+        #10;
         rd_en = 1;
 
-        @(posedge clk);
+        #40;
+        rd_en = 0;
+
+        // Simultaneous Read & Write
+        #10;
+        wr_en = 1;
+        rd_en = 1;
+        data_in = 8'h55;
+
+        #10;
+        data_in = 8'h66;
+
+        #10;
+        wr_en = 0;
         rd_en = 0;
 
         #20;
         $finish;
-
     end
 
-    // Monitor signals
+    // Monitor Signals
     initial begin
-        $monitor(
-            "Time=%0t | wr_en=%b rd_en=%b data_in=%h data_out=%h full=%b empty=%b wr_ptr=%d rd_ptr=%d",
-            $time, wr_en, rd_en, data_in, data_out,
-            full, empty,
-            dut.wr_ptr, dut.rd_ptr
-        );
+        $monitor("%0t\t%b\t%b\t%h\t%h\t%b\t%b",
+                 $time, wr_en, rd_en,
+                 data_in, data_out,
+                 full, empty);
     end
 
 endmodule
