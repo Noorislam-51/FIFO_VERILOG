@@ -1,112 +1,78 @@
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company:
-// Engineer:
-//
-// Create Date: 30.05.2026 10:08:19
-// Design Name: Synchronous FIFO
-// Module Name: sync_fifo
-// Description:
-// 64 x 8-bit Synchronous FIFO Memory
-// - Supports independent read and write operations
-// - Provides FULL and EMPTY status flags
-// - Uses read and write pointers for memory access
-// - FIFO follows First-In First-Out data transfer mechanism
-//////////////////////////////////////////////////////////////////////////////////
 
-module sync_fifo(
-    input clk,              // System clock
-    input rst,              // Asynchronous reset
-    input wr_en,            // Write enable
-    input rd_en,            // Read enable
+module async_fifo (
+    input  wr_clk,
+    input  rd_clk,
+    input  rst,
 
-    output buf_full,        // FIFO full flag
-    output buf_empty,       // FIFO empty flag
+    input  wr_en,
+    input  rd_en,
 
-    input [7:0] data_in,    // Data input bus
-    output reg [7:0] data_out // Data output bus
+    input  [7:0] data_in,
+    output reg [7:0] data_out,
+
+    output full,
+    output empty
 );
 
-    // Counts number of occupied locations in FIFO
-    reg [6:0] fifo_counter;
+    // FIFO memory
+    reg [7:0] mem [0:63];
 
-    // Write and Read pointers
-    reg [5:0] wr_ptr, rd_ptr;
+    // pointers
+    reg [5:0] wr_ptr;
+    reg [5:0] rd_ptr;
 
-    // FIFO memory array (64 locations × 8 bits)
-    reg [7:0] mem [63:0];
+    // counter (simple method)
+    reg [6:0] count;
 
-    // Empty flag asserted when FIFO contains no data
-    assign buf_empty = (fifo_counter == 0);
+    //----------------------------------------------------
+    // EMPTY & FULL
+    //----------------------------------------------------
+    assign empty = (count == 0);
+    assign full  = (count == 64);
 
-    // Full flag asserted when FIFO is completely filled
-    assign buf_full  = (fifo_counter == 64);
-
-    //////////////////////////////////////////////////////////////////////
-    // FIFO Counter Logic
-    // Keeps track of number of valid data entries in FIFO
-    //////////////////////////////////////////////////////////////////////
-    always @(posedge clk or posedge rst) begin
-        if (rst)
-            fifo_counter <= 0;
-
-        // Simultaneous read and write
-        // Number of stored elements remains unchanged
-        else if ((!buf_full && wr_en) && (!buf_empty && rd_en))
-            fifo_counter <= fifo_counter;
-
-        // Write only
-        else if (!buf_full && wr_en)
-            fifo_counter <= fifo_counter + 1;
-
-        // Read only
-        else if (!buf_empty && rd_en)
-            fifo_counter <= fifo_counter - 1;
-
-        else
-            fifo_counter <= fifo_counter;
-    end
-
-    //////////////////////////////////////////////////////////////////////
-    // Read Operation
-    // Data is read from FIFO memory using read pointer
-    //////////////////////////////////////////////////////////////////////
-    always @(posedge clk or posedge rst) begin
-        if (rst)
-            data_out <= 0;
-
-        else begin
-            if (rd_en && !buf_empty)
-                data_out <= mem[rd_ptr];
-        end
-    end
-
-    //////////////////////////////////////////////////////////////////////
-    // Write Operation
-    // Data is stored into FIFO memory using write pointer
-    //////////////////////////////////////////////////////////////////////
-    always @(posedge clk) begin
-        if (wr_en && !buf_full)
-            mem[wr_ptr] <= data_in;
-    end
-
-    //////////////////////////////////////////////////////////////////////
-    // Read and Write Pointer Update Logic
-    //////////////////////////////////////////////////////////////////////
-    always @(posedge clk or posedge rst) begin
+    //----------------------------------------------------
+    // WRITE OPERATION (write clock)
+    //----------------------------------------------------
+    always @(posedge wr_clk or posedge rst) begin
         if (rst) begin
-            wr_ptr <= 0;    // Reset write pointer
-            rd_ptr <= 0;    // Reset read pointer
+            wr_ptr <= 0;
         end
+        else if (wr_en && !full) begin
+            mem[wr_ptr] <= data_in;
+            wr_ptr <= wr_ptr + 1;
+        end
+    end
+
+    //----------------------------------------------------
+    // READ OPERATION (read clock)
+    //----------------------------------------------------
+    always @(posedge rd_clk or posedge rst) begin
+        if (rst) begin
+            rd_ptr   <= 0;
+            data_out <= 0;
+        end
+        else if (rd_en && !empty) begin
+            data_out <= mem[rd_ptr];
+            rd_ptr   <= rd_ptr + 1;
+        end
+    end
+
+    //----------------------------------------------------
+    // COUNTER LOGIC (simple control)
+    //----------------------------------------------------
+    always @(posedge wr_clk or posedge rd_clk or posedge rst) begin
+        if (rst)
+            count <= 0;
+
         else begin
+            // write only
+            if (wr_en && !full && !(rd_en && !empty))
+                count <= count + 1;
 
-            // Increment write pointer after successful write
-            if (wr_en && !buf_full)
-                wr_ptr <= wr_ptr + 1;
-
-            // Increment read pointer after successful read
-            if (rd_en && !buf_empty)
-                rd_ptr <= rd_ptr + 1;
+            // read only
+            else if (rd_en && !empty && !(wr_en && !full))
+                count <= count - 1;
         end
     end
 
