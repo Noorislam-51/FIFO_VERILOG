@@ -1,165 +1,112 @@
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 30.05.2026 11:00:04
-// Design Name: 
-// Module Name: sync_fifo_tb
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
 
+module tb_async_fifo;
 
-module sync_fifo_tb;
-
-    reg clk;
+    reg wr_clk;
+    reg rd_clk;
     reg rst;
+
     reg wr_en;
     reg rd_en;
-    reg [7:0] data_in;
 
-    wire buf_full;
-    wire buf_empty;
+    reg [7:0] data_in;
     wire [7:0] data_out;
 
+    wire full;
+    wire empty;
+
     // DUT
-    sync_fifo uut (
-        .clk(clk),
+    async_fifo uut (
+        .wr_clk(wr_clk),
+        .rd_clk(rd_clk),
         .rst(rst),
         .wr_en(wr_en),
         .rd_en(rd_en),
         .data_in(data_in),
-        .buf_full(buf_full),
-        .buf_empty(buf_empty),
-        .data_out(data_out)
+        .data_out(data_out),
+        .full(full),
+        .empty(empty)
     );
 
-    // Clock generation (10 ns period)
-    always #5 clk = ~clk;
+    //--------------------------------------------------
+    // Write Clock (10ns period)
+    //--------------------------------------------------
+    always #5 wr_clk = ~wr_clk;
 
-    integer i;
+    //--------------------------------------------------
+    // Read Clock (14ns period - different clock)
+    //--------------------------------------------------
+    always #7 rd_clk = ~rd_clk;
 
+    //--------------------------------------------------
+    // Test Stimulus
+    //--------------------------------------------------
     initial begin
-        clk = 0;
+        wr_clk = 0;
+        rd_clk = 0;
         rst = 1;
         wr_en = 0;
         rd_en = 0;
         data_in = 0;
 
-        // Reset
         #20;
         rst = 0;
 
         //--------------------------------------------------
-        // Write 10 values
+        // WRITE DATA
         //--------------------------------------------------
-        $display("Writing data...");
-
-        for(i = 0; i < 10; i = i + 1) begin
-            @(posedge clk);
+        repeat (10) begin
+            @(posedge wr_clk);
             wr_en = 1;
-            data_in = i + 8'hA0;
+            data_in = data_in + 1;
         end
 
-        @(posedge clk);
         wr_en = 0;
 
         //--------------------------------------------------
-        // Read 10 values
+        // READ DATA
         //--------------------------------------------------
-        $display("Reading data...");
-
-        for(i = 0; i < 10; i = i + 1) begin
-            @(posedge clk);
+        #20;
+        repeat (10) begin
+            @(posedge rd_clk);
             rd_en = 1;
         end
 
-        @(posedge clk);
         rd_en = 0;
 
         //--------------------------------------------------
-        // Fill FIFO completely
+        // MIXED OPERATION
         //--------------------------------------------------
-        $display("Filling FIFO...");
+        #20;
+        fork
+            begin
+                repeat (10) begin
+                    @(posedge wr_clk);
+                    wr_en = 1;
+                    data_in = data_in + 1;
+                end
+                wr_en = 0;
+            end
 
-        for(i = 0; i < 64; i = i + 1) begin
-            @(posedge clk);
-            wr_en = 1;
-            data_in = i;
-        end
-
-        @(posedge clk);
-        wr_en = 0;
-
-        //--------------------------------------------------
-        // Check Full Flag
-        //--------------------------------------------------
-        if(buf_full)
-            $display("FIFO FULL detected successfully");
-        else
-            $display("FIFO FULL detection failed");
-
-        //--------------------------------------------------
-        // Empty FIFO completely
-        //--------------------------------------------------
-        $display("Emptying FIFO...");
-
-        for(i = 0; i < 64; i = i + 1) begin
-            @(posedge clk);
-            rd_en = 1;
-        end
-
-        @(posedge clk);
-        rd_en = 0;
-
-        //--------------------------------------------------
-        // Check Empty Flag
-        //--------------------------------------------------
-        if(buf_empty)
-            $display("FIFO EMPTY detected successfully");
-        else
-            $display("FIFO EMPTY detection failed");
-
-        //--------------------------------------------------
-        // Simultaneous Read & Write
-        //--------------------------------------------------
-        $display("Testing simultaneous read/write...");
-
-        @(posedge clk);
-        wr_en = 1;
-        data_in = 8'h55;
-
-        @(posedge clk);
-        wr_en = 1;
-        rd_en = 1;
-        data_in = 8'hAA;
-
-        @(posedge clk);
-        wr_en = 0;
-        rd_en = 0;
+            begin
+                repeat (10) begin
+                    @(posedge rd_clk);
+                    rd_en = 1;
+                end
+                rd_en = 0;
+            end
+        join
 
         #50;
-
         $finish;
     end
 
-    // Monitor
+    //--------------------------------------------------
+    // Monitor output
+    //--------------------------------------------------
     initial begin
-        $monitor("Time=%0t rst=%b wr=%b rd=%b data_in=%h data_out=%h count=%0d full=%b empty=%b",
-                 $time, rst, wr_en, rd_en,
-                 data_in, data_out,
-                 uut.fifo_counter,
-                 buf_full, buf_empty);
+        $monitor("Time=%0t | WR_EN=%b RD_EN=%b DATA_IN=%d DATA_OUT=%d FULL=%b EMPTY=%b",
+                  $time, wr_en, rd_en, data_in, data_out, full, empty);
     end
 
 endmodule
